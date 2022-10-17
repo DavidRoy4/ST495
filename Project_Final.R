@@ -1,11 +1,11 @@
 library(tidyverse)
 library(readxl)
 
-fileList <- list.files(path="C:\\Users\\Sherlock\\Documents\\Fall 2022\\ST495\\Project", pattern=".xlsx")
+fileList <- list.files(path="Path to Raw Data", pattern=".xlsx")
 sapply(fileList, read_xlsx)
 
 
-setwd("C:\\Users\\Sherlock\\Documents\\Fall 2022\\ST495\\Project")
+setwd("Working Directory")
 fnames <- list.files()
 data <- lapply(fnames, read_xlsx)
 
