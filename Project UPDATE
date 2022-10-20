@@ -82,3 +82,22 @@ Tasks <- Tasks %>% rename("DEVID" = "ARTIFACTID")
 
 
 Final <- left_join(Final, Tasks[,c("DEVID", "MOREINFO", "GROUPID", "ACTION", "STATUS")], by = "DEVID")
+
+Roles <- data[[9]]
+Roles <- Roles[2:13,]
+Roles <- Roles %>% 
+  mutate("Role2" = ID, 
+         "ROLE_NAME2" = RNAME) %>% 
+  rename("Role1" = "ID", 
+         "ROLE_NAME1" = "RNAME")
+
+Final <- left_join(Final, Roles[,c("Role1", "ROLE_NAME1")], by = "Role1")
+Final <- left_join(Final, Roles[,c("Role2", "ROLE_NAME2")], by = "Role2")
+
+
+Users <- data[[11]]
+Users <- Users[1:21,]
+Users <- Users %>% rename("IDENTIFIED_BY" = "ID")
+
+Final <- left_join(Final, Users[,c("IDENTIFIED_BY", "ROLE_CODES")], by = "IDENTIFIED_BY")
+
