@@ -1,0 +1,126 @@
+library(tidyverse)
+library(readxl)
+library(stringr)
+
+fileList <- list.files(pattern=".xlsx")
+sapply(fileList, read_xlsx)
+
+
+
+fnames <- list.files()
+data <- lapply(fnames, read_xlsx)
+
+Error_Master <- data[[1]]
+Error_Master$DEVID <- as.numeric(Error_Master$DEVID)
+Error_Master <- Error_Master[rowSums(is.na(Error_Master)) != ncol(Error_Master),]
+
+
+Part1 <- separate(Error_Master,ERROR_CODE, c("Drop", "Category", "Subcategory", "Attribute"), "-")
+Part1 <- Part1 %>% select(-c("Drop"))
+
+Part1$Category <- as.numeric(Part1$Category)
+Part1$Subcategory <- as.numeric(Part1$Subcategory)
+Part1$Attribute <- as.numeric(Part1$Attribute)
+
+
+Codes <- data[[3]]
+Codes <- Codes[1:3134,]
+Codes <- Codes %>% mutate(Subcategory =  ID, 
+                          Sub_Desc = DESCRIPTION, 
+                          Attribute =  ID, 
+                          Att_Desc = DESCRIPTION)
+Codes <- Codes %>% rename("Category" = "ID", 
+                          "Cat_Desc" = "DESCRIPTION")
+
+
+Final <- left_join(Part1, Codes[,c("Category", "Cat_Desc", "CATLEVEL")], by = c("Category"))
+Final <- left_join(Final, Codes[,c("Subcategory", "Sub_Desc","CATLEVEL")], by = c("Subcategory"))
+Final <- left_join(Final, Codes[,c("Attribute", "Att_Desc", "CATLEVEL")], by = c("Attribute"))
+
+Final <- Final %>% select("CATLEVEL", "DEVID", "DESCR_IF_MISC", "DESCRIPTION", "DATE_OCCURRED", 
+                          "IDENTIFIED_BY", "MODIFIED_BY", "AFFECTED_TREATMENT", 
+                          "CORRECTED", "WHYNOTCORRECTED", "TX_INTENT", "TX_METHOD", 
+                          "DEV_TYPE", "ASSIGNED_USER", "ASSIGNED_ROLE", "Cat_Desc", 
+                          "Sub_Desc", "Att_Desc", "Attribute")
+
+
+Approvals <- data[[2]]
+Approvals <- Approvals[1:154, ] %>% select("DEVID", "STAGE", "ROLE", "DESCRIPTION", 
+                                           "APPROVED_BY", "ISARCHIVED")
+
+Part2 <- Approvals %>% filter(ISARCHIVED != 1)
+Part2 <- Part2 %>% group_by(DEVID) %>% summarize(Stage1 = min(ROLE), 
+                                                 Stage2 = max(ROLE), 
+                                                 Approved_By1 = min(APPROVED_BY), 
+                                                 Approved_By2 = max(APPROVED_BY), 
+                                                 Role1 = max(ROLE), 
+                                                 Role2 = min(ROLE))
+
+Part2$Stage2 <- ifelse(Part2$Stage2 == Part2$Stage1, NA, Part2$Stage2)
+Part2$Approved_By2 <- ifelse(Part2$Stage2 == is.na(Part2$Stage2), NA, Part2$Approved_By2)
+Part2$Role2 <- ifelse(Part2$Approved_By2 == is.na(Part2$Approved_By2), NA, Part2$Role2)
+
+Final <- left_join(Final, Part2, by = "DEVID")
+
+Corrections <- data[[4]]
+Corrections <- Corrections[1:476,]
+Corrections <- Corrections %>% rename("CUSTOM_CORRECTION" = "DESCRIPTION", 
+                                      "DEVID" = "DEVIATION_ID")
+Corrections$DEVID <- as.numeric(Corrections$DEVID)
+Corrections <- Corrections[1:476,]
+
+Document <- data[[7]]
+Document <- Document %>% filter(DOC_TYPE != is.na(DOC_TYPE)) %>% rename("DEVID" = "DEVIATION_ID")
+
+Part4 <- left_join(Corrections, Document[,c("DEVID", "DOC_TYPE")], by = "DEVID")
+
+Node <- data[[5]]
+Node <- Node[1:3240,]
+Node <- Node %>% rename("ACTION_ID" = "ID", 
+                        "SELECTED_CORRECTION" = "DESCRIPTION")
+
+
+Part3 <- left_join(Part4, Node, by = "ACTION_ID")
+
+Final <- merge(Final, Part3[,c("DEVID", "CUSTOM_CORRECTION", "SELECTED_CORRECTION", "DOC_TYPE")], by = "DEVID", all=TRUE)
+
+Tasks <- data[[10]]
+Tasks <- Tasks[1:160,]
+Tasks <- Tasks %>% rename("DEVID" = "ARTIFACTID")
+
+
+Final <- left_join(Final, Tasks[,c("DEVID", "MOREINFO", "GROUPID", "ACTION", "STATUS")], by = "DEVID")
+
+Roles <- data[[9]]
+Roles <- Roles[2:13,]
+Roles <- Roles %>% 
+  mutate("Role2" = ID, 
+         "ROLE_NAME2" = RNAME) %>% 
+  rename("Role1" = "ID", 
+         "ROLE_NAME1" = "RNAME")
+
+Final <- left_join(Final, Roles[,c("Role1", "ROLE_NAME1")], by = "Role1")
+Final <- left_join(Final, Roles[,c("Role2", "ROLE_NAME2")], by = "Role2")
+
+
+Users <- data[[11]]
+Users <- Users[1:21,]
+Users <- Users %>% rename("IDENTIFIED_BY" = "ID")
+
+Final <- left_join(Final, Users[,c("IDENTIFIED_BY", "ROLE_CODES")], by = "IDENTIFIED_BY")
+
+Lookup = data[[8]]
+
+Final$Attribute_Stage = paste(Final$Attribute, Final$Stage1, Final$Stage2)
+
+Final$Attribute_Stage = gsub("NA", "", Final$Attribute_Stage)
+
+Final$Attribute_Stage = gsub(" ", "", Final$Attribute_Stage)
+
+Lookup$Attribute_Role = paste(Lookup$ATTRIBUTE_ID, Lookup$ROLE_CODES)
+
+Lookup$Attribute_Role = gsub(" ", "", Lookup$Attribute_Role)
+
+Final = left_join(Final, Lookup[,c("Attribute_Role","SL", "IS_POST", "ROLE_CODES", "REG_VIOLATION", "POSSIBLE_VIOLATION", 
+                                   "CLIN_SIGNIFICANT", "SIGNIFICANT_ERROR", "MISADMIN", "RECORDABLE", "INTENT_METHOD_APPLICABLE", "CORRECTION_ROLES")], 
+                  by = c("Attribute_Stage"="Attribute_Role"))
