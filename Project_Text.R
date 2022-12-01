@@ -2,7 +2,6 @@ library(tidyverse)
 library(tm)
 library(wordcloud)
 
-setwd("C:\\Users\\Sherlock\\Documents")
 data <- read_csv(".//Fall 2022//ST495//final.csv")
 
 filtered <- data %>% 
